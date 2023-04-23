@@ -3,7 +3,7 @@
 # Author: xiezg
 # mail: xzghyd2008@hotmail.com
 # Created Time: 2023-04-19 15:39:25
-# Last modified: 2023-04-21 11:29:50
+# Last modified: 2023-04-23 11:45:40
 #########################################################################
 #!/bin/sh
 set -x
@@ -11,12 +11,16 @@ set -x
 #############
 #$1 需要监控轮转的日志文件，该文件是reopen的输出文件
 #$2 reopen进程的PID文件，用于通知reopen重新打开该文件
+#$3 LOCK_FILE 用该文件及flock来保证该脚本启动的唯一性
+#$4 将脚本的PID写入文件，用来在外部将该脚本kill掉
 #############
 
-LOCK_FILE=/run/containerd.lock
 MAX_FILESIZE=`expr 1024 \* 1024 \* 5`
 LOG_FILENAME=$1
 REOPEN_PID_PATH=$2
+LOCK_FILE=$3
+MYSELF_PID_FILE=$4
+
 
 function process_is_running(){
 
@@ -73,7 +77,7 @@ function rotate(){
 while [ `process_is_running \`cat $REOPEN_PID_PATH\` reopen` -eq 0 ]
 do
     echo "waiting reopen working"
-    sleep 1
+    sleep 5
 done
 
 REOPEN_PID=`cat $REOPEN_PID_PATH`
@@ -86,8 +90,11 @@ if [ $? -ne 0 ];then
     exit 0
 fi
 
+SUBPID=$(exec sh -c 'echo "$PPID"')
+echo $SUBPID > ${MYSELF_PID_FILE}
+
 cd /tmp/
-while true
+while [ `process_is_running \`cat $REOPEN_PID_PATH\` reopen` -eq 1 ]
 do
     sleep 5 
 
